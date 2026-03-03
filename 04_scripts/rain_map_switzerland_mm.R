@@ -1,15 +1,13 @@
 # Minimal Meteomatics rain-layer fetch for Switzerland
 # Goal: set a date and retrieve one-day rain map grid data.
-
+Sys.setenv("mm_user" = "schweizer_hagel")
+Sys.setenv("mm_password" = "RVvI525YLI")
 # Required env vars:
 #   mm_user
 #   mm_password
 #
 # Example:
-#   Sys.setenv(mm_user = "your_user", mm_password = "your_password")
-#   source("04_scripts/rain_map_switzerland_mm.R")
-#   rain <- fetch_switzerland_rain_map("2025-06-15")
-#   head(rain)
+
 
 # Hard-coded defaults (minimal and explicit)
 MM_BASE_URL <- "https://api.meteomatics.com"
@@ -62,6 +60,7 @@ fetch_switzerland_rain_map <- function(date_string,
 
   url <- build_rain_map_url(date_string)
 
+  browser()
   response <- httr::GET(url, httr::authenticate(user = user, password = password))
   status <- httr::status_code(response)
   if (status >= 300) {
@@ -80,16 +79,18 @@ fetch_switzerland_rain_map <- function(date_string,
   out
 }
 
-save_rain_map_csv <- function(date_string, path = NULL) {
-  data <- fetch_switzerland_rain_map(date_string)
 
-  if (is.null(path)) {
-    path <- paste0("rain_map_switzerland_", gsub("-", "", date_string), ".csv")
-  }
 
-  utils::write.csv(data, file = path, row.names = FALSE)
-  path
-}
+source("04_scripts/rain_map_switzerland_mm.R")
+rain <- fetch_switzerland_rain_map("2025-06-15")
+head(rain)
+
+
+
+
+
+
+
 
 # Optional CLI mode:
 #   Rscript 04_scripts/rain_map_switzerland_mm.R 2025-06-15

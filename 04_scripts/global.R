@@ -43,6 +43,13 @@ library(duckdb)
 library(DBI)
 library(RPostgreSQL)
 library(RPostgres)
+library(RnData)
+library(zoo)
+
+
+library(terra)
+library(ggplot2)
+library(patchwork)
 
 ### ENVIRONMENT MANAGEMENT
 # Uncomment and run manually if needed
@@ -55,9 +62,11 @@ library(RPostgres)
 
 # Install manually
 # install.packages('remotes')
-# remotes::install_git('http://gitlab11.hagel.local/rnd/rnd_packages/RnData.git')
+#remotes::install_git('http://gitlab11.hagel.local/rnd/rnd_packages/RnData.git')
 # remotes::install_git('http://gitlab11.hagel.local/rnd/rnd_packages/RnData.git', upgrade = 'never')
 
 # Delete from lockfile
 # renv::record(list(RnData = NULL))
 
+# Sys.setenv("mm_user" = "schweizer_hagel")
+# Sys.setenv("mm_password" = "RVvI525YLI")
