@@ -276,11 +276,13 @@ prepare_bmn_station_data<- function(var_id, ...){
 
 
 # fetches and parses the meteomatics api data
-fetch_mm_model_data <- function(var_id, lon, lat, year, timeres, parameter, model, modelparam, ...) {
+fetch_mm_model_data <- function(var_id, lon, lat, year, timeres, parameter, model, modelparam, start_date = NULL, end_date = NULL, ...) {
 
   print(paste("************************************"))
-  date <- as.Date(paste0(year, "-01-01")) %>% parse_time(timeres)
-  end <- as.Date(paste0(year, "-12-31")) %>% parse_time(timeres)
+  start_day <- if (!is.null(start_date)) as.Date(start_date) else as.Date(paste0(year, "-01-01"))
+  end_day <- if (!is.null(end_date)) as.Date(end_date) else as.Date(paste0(year, "-12-31"))
+  date <- start_day %>% parse_time(timeres)
+  end <- end_day %>% parse_time(timeres)
   url <- glue("https://{Sys.getenv('mm_user')}:{Sys.getenv('mm_password')}@api.meteomatics.com/{date}--{end}:{timeres}/{parameter}/{lat},{lon}/csv?{modelparam}")
  # print(url)
   # url <- "https://schweizer_hagel:RVvI525YLI@api.meteomatics.com/2020-01-01T00:00:00.000+01:00--2020-12-31T00:00:00.000+01:00:PT1H/precip_1h:mm/47.3744489,8.5410422/csv?model=ecmwf-era5"
@@ -304,14 +306,16 @@ fetch_mm_model_data <- function(var_id, lon, lat, year, timeres, parameter, mode
 
 
 # fetches and parses the meteoblue api data
-fetch_mb_model_data <- function(var_id, lon, lat, year, timeres, parameter, model, modelparam, ...) {
+fetch_mb_model_data <- function(var_id, lon, lat, year, timeres, parameter, model, modelparam, start_date = NULL, end_date = NULL, ...) {
   
   # year <- 2024
   print("************************************")
   print(paste("Meteoblue:", var_id, year, model))
   
-  date <- as.Date(paste0(year, "-01-01")) %>% parse_time(timeres)
-  end  <- as.Date(paste0(year, "-12-31")) %>% parse_time(timeres)
+  start_day <- if (!is.null(start_date)) as.Date(start_date) else as.Date(paste0(year, "-01-01"))
+  end_day <- if (!is.null(end_date)) as.Date(end_date) else as.Date(paste0(year, "-12-31"))
+  date <- start_day %>% parse_time(timeres)
+  end  <- end_day %>% parse_time(timeres)
   
   body <- list(
     units = list(
@@ -367,16 +371,16 @@ fetch_mb_model_data <- function(var_id, lon, lat, year, timeres, parameter, mode
 
 
 # # fetches 1 year all models
-get_model_data_year <- function(var_id, lon, lat, year,  timeres, parameter, var_list){
+get_model_data_year <- function(var_id, lon, lat, year,  timeres, parameter, var_list, start_date = NULL, end_date = NULL){
   # browser()
   # here get the mm data
   mm_list <-var_list[["mm"]]
-  mm_data <- purrr::imap_dfr(mm_list$models, ~fetch_mm_model_data(var_id, lon, lat, year,  timeres = mm_list$timeres, parameter = mm_list$parameter, model = .y, modelparam = .x))
+  mm_data <- purrr::imap_dfr(mm_list$models, ~fetch_mm_model_data(var_id, lon, lat, year,  timeres = mm_list$timeres, parameter = mm_list$parameter, model = .y, modelparam = .x, start_date = start_date, end_date = end_date))
   
   
   # here add meteoblue data
   mb_list <-var_list[["mb"]]
-  mb_data <- purrr::imap_dfr(mb_list$models, ~fetch_mb_model_data(var_id, lon, lat, year,  timeres = mb_list$timeres, parameter = mb_list$parameter, model = .y, modelparam = .x))
+  mb_data <- purrr::imap_dfr(mb_list$models, ~fetch_mb_model_data(var_id, lon, lat, year,  timeres = mb_list$timeres, parameter = mb_list$parameter, model = .y, modelparam = .x, start_date = start_date, end_date = end_date))
 
   data <- rbind(mm_data, mb_data)
   
@@ -395,9 +399,14 @@ get_model_data_year <- function(var_id, lon, lat, year,  timeres, parameter, var
 
 
 # takes a year, lon, lat, var, timeres and a model list and returns a joined df with all available models
-extract_model_data <- function(var_id, lon, lat, years, timeres, parameter, var_list, ...){
+extract_model_data <- function(var_id, lon, lat, years, timeres, parameter, var_list, target_date = NULL, ...){
+
+  parsed_target_date <- if (!is.null(target_date)) as.Date(target_date) else NULL
+  years_to_fetch <- if (!is.null(parsed_target_date)) lubridate::year(parsed_target_date) else years
+  model_start_date <- if (!is.null(parsed_target_date)) parsed_target_date else NULL
+  model_end_date <- if (!is.null(parsed_target_date)) parsed_target_date else NULL
   
-  data <- purrr::map_dfr(years, ~get_model_data_year(var_id, lon, lat, year = .x,  timeres, parameter, var_list))
+  data <- purrr::map_dfr(years_to_fetch, ~get_model_data_year(var_id, lon, lat, year = .x,  timeres, parameter, var_list, start_date = model_start_date, end_date = model_end_date))
   
   ret <- list(
     all_models = list(unique(unlist(data$models, use.names = F))),
@@ -409,9 +418,10 @@ extract_model_data <- function(var_id, lon, lat, years, timeres, parameter, var_
 
 ###----------------------------- RUNNER VALIDATE DATA ---------------------------------
 
-RUN_data_extraction <- function(var_id, country, suffix = "X", renew_meta = FALSE, parameter_list){
+RUN_data_extraction <- function(var_id, country, suffix = "X", renew_meta = FALSE, parameter_list, target_date = NULL){
 
   var_list <- parameter_list[[var_id]]
+  parsed_target_date <- if (!is.null(target_date)) as.Date(target_date) else NULL
 
   
   if (renew_meta){
@@ -438,11 +448,11 @@ RUN_data_extraction <- function(var_id, country, suffix = "X", renew_meta = FALS
   ## normal
   Z <- Y %>%
     slice(1:2)%>%
-    dplyr::mutate(purrr::pmap_dfr(., .f = extract_model_data, var_list = var_list))
+    dplyr::mutate(purrr::pmap_dfr(., .f = extract_model_data, var_list = var_list, target_date = parsed_target_date))
 
   ## paralellized
   future::plan("multisession", workers = 30)  # Use n_cores
-  Z <- Y %>% dplyr::mutate(furrr::future_pmap_dfr(., .f = extract_model_data, var_list = var_list))
+  Z <- Y %>% dplyr::mutate(furrr::future_pmap_dfr(., .f = extract_model_data, var_list = var_list, target_date = parsed_target_date))
   future::plan("sequential")
   
   meta_cols <- c("loc_name","wmo_id", "alt_id", "date", "end", "timeres", "parameter", "years","min_year", "max_year", "country_id", "country_name", "lon", "lat")
@@ -502,7 +512,7 @@ parameter_list <- GET_parameters()
 
 res <- RUN_data_extraction("rain_trend", "switzerland", "trend",  renew_meta = F, parameter_list = parameter_list)
 #res <- RUN_data_extraction(var_id, country, suffix, renew_meta = F, parameter_list = parameter_list)
-#res <- RUN_data_extraction("rain_day", "switzerland", "cal", renew_meta = )
+#res <- RUN_data_extraction("rain_day", "switzerland", "cal", renew_meta = FALSE, parameter_list = parameter_list, target_date = "2025-06-15")
 #res <- RUN_data_extraction("rain_hour", "switzerland", "cal", renew_meta = FALSE)
 
 
